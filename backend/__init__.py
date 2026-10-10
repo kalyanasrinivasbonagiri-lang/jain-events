@@ -1,1 +1,1 @@
-"""Mystery Case Solver Flask backend."""
+"""Event Registration Portal backend."""
