@@ -1,1 +1,1 @@
-"""Event Registration Portal backend."""
+"""Jain Events backend."""

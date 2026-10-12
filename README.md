@@ -38,11 +38,11 @@ Open <http://127.0.0.1:8000>. The home page is student sign-in and account creat
 ## MongoDB Compass demonstration
 
 1. Connect Compass to `mongodb://localhost:27017`.
-2. Open the `event_portal` database, then the `events` collection. Each document contains its event details and current `totalSeats` and `availableSeats` values.
-3. Create a student account with name, email, USN, branch, year, and password. Sign in and reserve an event seat. Refresh `events`: `availableSeats` decreases by one. Open `registrations` to see the registration and student details, and `students` to see the account profile (passwords are stored as salted hashes).
+2. Open the `event_portal` database, then the `events` collection. Each document contains its event name, description, date, venue, and current `totalSeats` and `availableSeats` values.
+3. Create a student account with name, email, USN, branch, year, and password. Sign in and reserve an event seat. Refresh `events`: `availableSeats` decreases by one. Open `registrations` to see `eventName` saved with the student's details, and `students` to see the account profile (passwords are stored as salted hashes).
 4. Cancel the registration from **My registrations**. Refresh both collections: the registration disappears and the event's available seat count increases.
 5. Sign in at `/admin` and add, edit, or delete an event. Refresh the `events` collection. Deleting an event also removes its registration documents.
-6. The site's **MongoDB view** is an admin-protected, auto-refreshing JSON view of both collections. Compass reads the same persisted data directly from MongoDB.
+6. The site's **MongoDB view** is an admin-protected, auto-refreshing JSON view of the collections. Compass reads the same persisted data directly from MongoDB.
 
 Sample seed events are safe to refresh: seeding updates their details and capacity while retaining registrations already made for those events. Capacity will not be reduced below the number of existing registrations.
 
@@ -57,7 +57,7 @@ Admin routes require the `X-Admin-Token` header. Obtain the token with `POST /ap
 - `DELETE /api/events/{id}` — admin: delete an event and its registrations
 - `POST /api/student/signup` and `POST /api/student/login` — create or sign in to a student account
 - `POST /api/events/{id}/register` — register the signed-in student
-- `DELETE /api/events/{id}/register?email=...` — cancel a registration
+- `DELETE /api/events/{id}/register` — cancel your registration (student token required)
 - `GET /api/events/{id}/registrations` — admin: list an event's registrations
 - `GET /api/my-registrations` — list the signed-in student's registrations
 - `GET /api/stats` — admin: event and registration totals for the dashboard chart

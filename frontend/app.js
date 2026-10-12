@@ -1,4 +1,4 @@
-const API = '/api';
+﻿const API = '/api';
 const ADMIN_TOKEN_KEY = 'event-portal-admin-token';
 const STUDENT_TOKEN_KEY = 'event-portal-student-token';
 const STUDENT_PROFILE_KEY = 'event-portal-student-profile';
@@ -49,7 +49,7 @@ function syncStudentNav() {
   if (!link) return;
   const profile = studentProfile();
   if (studentToken() && profile) {
-    link.textContent = `Hi, ${profile.studentName.split(/\s+/)[0]} · Sign out`;
+    link.textContent = `Hi, ${profile.studentName.split(/\s+/)[0]} Â· Sign out`;
     link.href = '#student-logout';
     link.onclick = (event) => {
       event.preventDefault();
@@ -64,7 +64,7 @@ function renderEventCards(events) {
   const grid = $('#events-grid');
   if (!grid) return;
   if (!events.length) {
-    grid.innerHTML = '<div class="empty-state"><span>○</span><h3>No events found</h3><p>Try changing your search or date filter.</p></div>';
+    grid.innerHTML = '<div class="empty-state"><span>â—‹</span><h3>No events found</h3><p>Try changing your search or date filter.</p></div>';
     return;
   }
   const signedIn = Boolean(studentToken());
@@ -79,7 +79,7 @@ function renderEventCards(events) {
       <div class="event-card-top"><span class="event-category">CAMPUS EVENT</span><span class="seat-pill ${full ? 'full' : ''}">${full ? 'No seats left' : `${event.availableSeats} seats left`}</span></div>
       <div class="event-date-block"><span>${escapeHtml(new Date(event.date).toLocaleDateString(undefined, { month: 'short' }))}</span><strong>${escapeHtml(new Date(event.date).toLocaleDateString(undefined, { day: '2-digit' }))}</strong></div>
       <h3>${escapeHtml(event.title)}</h3><p class="event-description">${escapeHtml(event.description)}</p>
-      <div class="event-meta"><span>◷ ${escapeHtml(formatDate(event.date))}</span><span>⌖ ${escapeHtml(event.venue)}</span></div>
+      <div class="event-meta"><span>â—· ${escapeHtml(formatDate(event.date))}</span><span>âŒ– ${escapeHtml(event.venue)}</span></div>
       <div class="event-card-bottom"><span>${event.registrationCount || 0} students registered</span>${action}</div>
     </article>`;
   }).join('');
@@ -107,13 +107,21 @@ function initEventsPage() {
       if (!allEvents.length) $('#events-grid').innerHTML = '<div class="empty-state"><h3>Events are temporarily unavailable</h3><p>Refresh in a moment.</p></div>';
     }
   };
-  search.addEventListener('input', applyFilters);
+  const loadHighlights = async () => {
+    const panel = $('#event-highlights');
+    try {
+      const highlights = await api('/event-highlights');
+      if (!highlights.length) { panel.classList.add('hidden'); return; }
+      panel.classList.remove('hidden');
+      panel.innerHTML = `<div class="highlight-heading"><div class="eyebrow">Popular upcoming</div><strong>Getting attention</strong></div>${highlights.map((item) => `<article><span>${escapeHtml(item.title)}</span><small>${item.registrationCount} registered · ${item.availableSeats} seats left</small></article>`).join('')}`;
+    } catch { panel.classList.add('hidden'); }
+  };  search.addEventListener('input', applyFilters);
   dateFilter.addEventListener('change', applyFilters);
   $('#clear-filters').addEventListener('click', () => { search.value = ''; dateFilter.value = ''; applyFilters(); });
   $('#events-grid').addEventListener('click', async (event) => {
     const button = event.target.closest('.register-event');
     if (!button) return;
-    button.disabled = true; button.textContent = 'Saving seat…';
+    button.disabled = true; button.textContent = 'Saving seatâ€¦';
     try {
       await api(`/events/${button.dataset.eventId}/register`, { method: 'POST' });
       toast('Your seat is reserved. See you there!');
@@ -126,7 +134,9 @@ function initEventsPage() {
     }
   });
   loadEvents();
+  loadHighlights();
   setInterval(loadEvents, 5000);
+  setInterval(loadHighlights, 15000);
 }
 
 function initStudentLoginPage() {
@@ -146,7 +156,7 @@ function initStudentLoginPage() {
   const completeSignIn = (result) => {
     localStorage.setItem(STUDENT_TOKEN_KEY, result.token);
     localStorage.setItem(STUDENT_PROFILE_KEY, JSON.stringify(result.student));
-    window.location.href = '/';
+    window.location.href = '/events';
   };
   loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -170,13 +180,13 @@ function initMyRegistrationsPage() {
   const load = async () => {
     try {
       const [student, items] = await Promise.all([api('/student/me'), api('/my-registrations')]);
-      $('.page-intro > p').textContent = `${student.studentName} · ${student.usn} · ${student.branch}, Year ${student.year}`;
+      $('.page-intro > p').textContent = `${student.studentName} Â· ${student.usn} Â· ${student.branch}, Year ${student.year}`;
       if (!items.length) {
         list.innerHTML = '<div class="empty-state"><h3>No registrations yet</h3><p>Find an event that interests you and reserve a seat.</p><a class="button primary" href="/">Explore events</a></div>';
         status.textContent = ''; return;
       }
       status.textContent = `${items.length} event${items.length === 1 ? '' : 's'} on your list`;
-      list.innerHTML = items.map((item) => `<article class="registration-card"><div><span class="event-category">${escapeHtml(item.event.venue)}</span><h3>${escapeHtml(item.event.title)}</h3><p>${escapeHtml(formatDate(item.event.date))} · ${escapeHtml(item.event.venue)}</p><small>${escapeHtml(item.usn || student.usn)} · ${escapeHtml(item.branch || student.branch)}, Year ${escapeHtml(item.year || student.year)} · Reserved ${escapeHtml(formatDate(item.registeredAt))}</small></div><button class="button danger cancel-registration" data-event-id="${item.eventId}">Cancel seat</button></article>`).join('');
+      list.innerHTML = items.map((item) => `<article class="registration-card"><div><span class="event-category">${escapeHtml(item.event.venue)}</span><h3>${escapeHtml(item.eventName || item.event.title)}</h3><p>${escapeHtml(formatDate(item.event.date))} Â· ${escapeHtml(item.event.venue)}</p><small>${escapeHtml(item.usn || student.usn)} Â· ${escapeHtml(item.branch || student.branch)}, Year ${escapeHtml(item.year || student.year)} Â· Reserved ${escapeHtml(formatDate(item.registeredAt))}</small></div><button class="button danger cancel-registration" data-event-id="${item.eventId}">Cancel seat</button></article>`).join('');
     } catch (error) {
       if (error.message.toLowerCase().includes('student')) { localStorage.removeItem(STUDENT_TOKEN_KEY); loginPanel.classList.remove('hidden'); }
       else status.innerHTML = `<span class="inline-error">${escapeHtml(error.message)}</span>`;
@@ -208,15 +218,14 @@ function initAdminPage() {
   const eventForm = $('#event-form');
   let registrationChart = null;
   let branchChart = null;
+  let chartSignature = '';
   const loadAdmin = async () => {
     try {
       const [events, stats] = await Promise.all([api('/events'), api('/stats')]);
-      const totalSeats = events.reduce((sum, item) => sum + item.totalSeats, 0);
-      const freeSeats = events.reduce((sum, item) => sum + item.availableSeats, 0);
       $('#metric-events').textContent = stats.totalEvents;
       $('#metric-registrations').textContent = stats.totalRegistrations;
       $('#metric-students').textContent = stats.totalStudents;
-      $('#metric-seats').textContent = freeSeats;
+      $('#metric-seats').textContent = stats.availableSeats;
       $('#admin-events').innerHTML = events.map((item) => {
         const fill = item.totalSeats ? Math.round(((item.totalSeats - item.availableSeats) / item.totalSeats) * 100) : 0;
         return `<tr class="event-row" data-open-event="${item._id}"><td><button class="event-name-button" data-open-event="${item._id}">${escapeHtml(item.title)}</button><small>${escapeHtml(item.venue)}</small></td><td>${escapeHtml(formatDate(item.date))}</td><td><div class="seat-cell"><strong>${item.availableSeats}</strong><span> / ${item.totalSeats}</span></div><div class="seat-meter"><i style="width:${fill}%"></i></div></td><td><span class="table-count">${item.registrationCount || 0}</span></td><td class="table-actions"><button class="button mini secondary edit-event" data-id="${item._id}">Edit</button><button class="button mini danger delete-event" data-id="${item._id}">Delete</button></td></tr>`;
@@ -228,7 +237,13 @@ function initAdminPage() {
     }
   };
   const drawCharts = (stats) => {
-    if (!window.Chart) return;
+    const signature = JSON.stringify({ events: stats.events.map((item) => [item.title, item.registrations]), branches: stats.branches });
+    if (signature === chartSignature) return;
+    chartSignature = signature;
+    if (!window.Chart) {
+      drawFallbackCharts(stats);
+      return;
+    }
     if (registrationChart) registrationChart.destroy();
     if (branchChart) branchChart.destroy();
     const ctx = $('#registration-chart').getContext('2d');
@@ -247,14 +262,39 @@ function initAdminPage() {
       options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 7, padding: 16, color: '#656b82', font: { size: 11 } } }, tooltip: { backgroundColor: '#252a43', padding: 12 } } },
     });
   };
+  const drawFallbackCharts = (stats) => {
+    const values = stats.events.map((item) => item.registrations);
+    const maximum = Math.max(1, ...values);
+    $('#registration-chart').parentElement.innerHTML = stats.events.length
+      ? `<div class="fallback-bar-chart">${stats.events.map((item) => {
+        const height = Math.max(3, (item.registrations / maximum) * 100);
+        const label = item.title.length > 17 ? `${item.title.slice(0, 16)}â€¦` : item.title;
+        return `<div class="fallback-bar-column" title="${escapeHtml(item.title)}: ${item.registrations} registrations"><strong>${item.registrations}</strong><div class="fallback-bar-track"><i style="height:${height}%"></i></div><span>${escapeHtml(label)}</span></div>`;
+      }).join('')}</div>`
+      : '<div class="chart-empty">Create an event to start tracking attendance.</div>';
+
+    const palette = ['#5967db', '#34a88a', '#efb34e', '#e57883', '#8d6ad6', '#54a7c5', '#8da75e'];
+    const total = stats.branches.reduce((sum, item) => sum + item.registrations, 0);
+    if (!total) {
+      $('#branch-chart').parentElement.innerHTML = '<div class="chart-empty">Student branch breakdown appears after registrations.</div>';
+      return;
+    }
+    let passed = 0;
+    const stops = stats.branches.map((item, index) => {
+      const start = passed;
+      passed += (item.registrations / total) * 100;
+      return `${palette[index % palette.length]} ${start}% ${passed}%`;
+    });
+    $('#branch-chart').parentElement.innerHTML = `<div class="fallback-donut-layout"><div class="fallback-donut" style="background:conic-gradient(${stops.join(',')})"><span><strong>${total}</strong><small>students</small></span></div><ul class="fallback-legend">${stats.branches.map((item, index) => `<li><i style="background:${palette[index % palette.length]}"></i><span>${escapeHtml(item.branch)}</span><strong>${item.registrations}</strong></li>`).join('')}</ul></div>`;
+  };
   const openEvent = async (id) => {
     try {
       const data = await api(`/events/${id}/registrations`);
       $('#registrations-title').textContent = data.event.title;
-      $('#attendee-summary').textContent = `${data.event.venue} · ${formatDate(data.event.date)}`;
+      $('#attendee-summary').textContent = `${data.event.venue} Â· ${formatDate(data.event.date)}`;
       $('#attendee-count').textContent = data.registrations.length;
-      $('#attendee-capacity').textContent = `${data.event.totalSeats} total seats · ${data.event.availableSeats} available`;
-      $('#registrations-table').innerHTML = data.registrations.map((person) => `<tr><td><strong>${escapeHtml(person.studentName)}</strong></td><td>${escapeHtml(person.usn || '—')}</td><td>${escapeHtml(person.branch || '—')} · Year ${escapeHtml(person.year || '—')}</td><td>${escapeHtml(person.email)}</td><td>${escapeHtml(formatDate(person.registeredAt))}</td></tr>`).join('') || '<tr><td colspan="5" class="no-attendees">No students registered yet.</td></tr>';
+      $('#attendee-capacity').textContent = `${data.event.totalSeats} total seats Â· ${data.event.availableSeats} available`;
+      $('#registrations-table').innerHTML = data.registrations.map((person) => `<tr><td><strong>${escapeHtml(person.studentName)}</strong></td><td>${escapeHtml(person.usn || 'â€”')}</td><td>${escapeHtml(person.branch || 'â€”')} Â· Year ${escapeHtml(person.year || 'â€”')}</td><td>${escapeHtml(person.email)}</td><td>${escapeHtml(formatDate(person.registeredAt))}</td></tr>`).join('') || '<tr><td colspan="5" class="no-attendees">No students registered yet.</td></tr>';
       $('#registrations-panel').classList.remove('hidden');
       $('#registrations-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch (error) { toast(error.message, true); }

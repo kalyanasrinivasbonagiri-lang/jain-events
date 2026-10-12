@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pymongo.errors import PyMongoError
 
@@ -22,7 +22,7 @@ async def lifespan(_: FastAPI):
     client.close()
 
 
-app = FastAPI(title="Event Registration Portal", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Jain Events", version="1.0.0", lifespan=lifespan)
 app.include_router(events_router)
 app.include_router(admin_router)
 app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
@@ -78,6 +78,11 @@ def admin_login_page():
 @app.get("/admin")
 def admin_shortcut():
     return FileResponse(FRONTEND / "admin-login.html")
+
+
+@app.get("/events/admin")
+def admin_typo_shortcut():
+    return RedirectResponse(url="/admin", status_code=307)
 
 
 @app.get("/admin/dashboard")

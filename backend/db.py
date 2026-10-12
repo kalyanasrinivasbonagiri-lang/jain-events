@@ -2,6 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from pymongo import ASCENDING, MongoClient
+from bson import ObjectId
 
 load_dotenv()
 
@@ -26,3 +27,10 @@ def create_indexes() -> None:
         {"branch": {"$exists": False}, "email": {"$exists": True}},
         [{"$set": {"branch": "Not provided", "year": 1, "usn": {"$concat": ["LEGACY-", {"$toString": "$_id"}]}}}],
     )
+    for registration in registrations.find({"eventName": {"$exists": False}}, {"eventId": 1}):
+        event = events.find_one({"_id": registration["eventId"]}, {"title": 1})
+        if event:
+            registrations.update_one(
+                {"_id": registration["_id"], "eventName": {"$exists": False}},
+                {"$set": {"eventName": event["title"]}},
+            )

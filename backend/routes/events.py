@@ -27,7 +27,9 @@ def event_or_404(event_id: ObjectId) -> dict:
 
 
 def event_payload(event: dict) -> dict:
-    event["registrationCount"] = registrations.count_documents({"eventId": event["_id"]})
+    if "registrationCount" not in event:
+        event["registrationCount"] = registrations.count_documents({"eventId": event["_id"]})
+    event["registrationCount"] = int(event["registrationCount"])
     return mongo_json(event)
 
 
@@ -48,7 +50,22 @@ def list_events(q: str | None = Query(default=None, max_length=120), date: str |
         start = datetime.combine(selected_date, datetime.min.time(), tzinfo=timezone.utc)
         end = datetime.combine(selected_date, datetime.max.time(), tzinfo=timezone.utc)
         query["date"] = {"$gte": start, "$lte": end}
-    return [event_payload(item) for item in events.find(query).sort("date", 1)]
+    pipeline = [
+        {"$match": query},
+        {"$lookup": {
+            "from": registrations.name,
+            "let": {"eventId": "$_id"},
+            "pipeline": [
+                {"$match": {"$expr": {"$eq": ["$eventId", "$$eventId"]}}},
+                {"$count": "count"},
+            ],
+            "as": "registrationSummary",
+        }},
+        {"$set": {"registrationCount": {"$ifNull": [{"$arrayElemAt": ["$registrationSummary.count", 0]}, 0]}}},
+        {"$unset": "registrationSummary"},
+        {"$sort": {"date": 1}},
+    ]
+    return [event_payload(item) for item in events.aggregate(pipeline)]
 
 
 @router.post("/events", status_code=201, dependencies=[Depends(require_admin)])
@@ -113,6 +130,7 @@ def register_for_event(event_id: str, student: dict = Depends(require_student)):
 
     registration = {
         "eventId": oid,
+        "eventName": updated["title"],
         "studentName": student["studentName"],
         "email": student["email"],
         "usn": student["usn"],
@@ -129,7 +147,6 @@ def register_for_event(event_id: str, student: dict = Depends(require_student)):
         events.update_one({"_id": oid}, {"$inc": {"availableSeats": 1}})
         raise
     registration["_id"] = result.inserted_id
-    registration["eventTitle"] = updated["title"]
     return mongo_json(registration)
 
 
@@ -182,22 +199,30 @@ def my_registrations(student: dict = Depends(require_student)):
 
 @router.get("/stats", dependencies=[Depends(require_admin)])
 def stats():
-    rows = []
-    for event in events.find().sort("date", 1):
-        count = registrations.count_documents({"eventId": event["_id"]})
-        rows.append(
-            {
-                "eventId": str(event["_id"]),
-                "title": event["title"],
-                "registrations": count,
-                "availableSeats": event["availableSeats"],
-                "totalSeats": event["totalSeats"],
-            }
-        )
+    rows = list(events.aggregate([
+        {"$lookup": {
+            "from": registrations.name,
+            "let": {"eventId": "$_id"},
+            "pipeline": [
+                {"$match": {"$expr": {"$eq": ["$eventId", "$$eventId"]}}},
+                {"$count": "count"},
+            ],
+            "as": "registrationSummary",
+        }},
+        {"$set": {"registrations": {"$ifNull": [{"$arrayElemAt": ["$registrationSummary.count", 0]}, 0]}}},
+        {"$project": {"title": 1, "registrations": 1, "availableSeats": 1, "totalSeats": 1}},
+        {"$sort": {"date": 1}},
+    ]))
+    total_seats = sum(item["totalSeats"] for item in rows)
+    available_seats = sum(item["availableSeats"] for item in rows)
+    for item in rows:
+        item["eventId"] = str(item.pop("_id"))
     return {
         "totalEvents": len(rows),
         "totalRegistrations": sum(item["registrations"] for item in rows),
         "totalStudents": students.count_documents({}),
+        "totalSeats": total_seats,
+        "availableSeats": available_seats,
         "branches": branch_stats(),
         "events": rows,
     }
@@ -209,3 +234,26 @@ def branch_stats() -> list[dict]:
         {"$sort": {"registrations": -1}},
     ]
     return [{"branch": row["_id"], "registrations": row["registrations"]} for row in registrations.aggregate(pipeline)]
+
+
+@router.get("/event-highlights")
+def event_highlights():
+    """Public student-facing summary, ranked and calculated in MongoDB."""
+    now = datetime.now(timezone.utc)
+    pipeline = [
+        {"$match": {"date": {"$gt": now}}},
+        {"$lookup": {
+            "from": registrations.name,
+            "let": {"eventId": "$_id"},
+            "pipeline": [
+                {"$match": {"$expr": {"$eq": ["$eventId", "$$eventId"]}}},
+                {"$count": "count"},
+            ],
+            "as": "registrationSummary",
+        }},
+        {"$set": {"registrationCount": {"$ifNull": [{"$arrayElemAt": ["$registrationSummary.count", 0]}, 0]}}},
+        {"$project": {"title": 1, "date": 1, "venue": 1, "availableSeats": 1, "registrationCount": 1}},
+        {"$sort": {"registrationCount": -1, "date": 1}},
+        {"$limit": 3},
+    ]
+    return [mongo_json(item) for item in events.aggregate(pipeline)]
